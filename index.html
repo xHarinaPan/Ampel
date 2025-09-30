@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestión de Semáforos Pro</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        /* Estilos CSS para Interfaz Moderna */
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #f4f7f9;
+        }
+
+        #map {
+            flex-grow: 1;
+            height: 100%;
+            z-index: 0;
+        }
+
+        /* Panel Desplegable (Sidebar) en el lado derecho */
+        #sidebar {
+            width: 350px; 
+            background-color: #ffffff;
+            box-shadow: -4px 0 10px rgba(0, 0, 0, 0.15); /* Sombra moderna */
+            padding: 20px;
+            overflow-y: auto;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .title {
+            color: #1a73e8;
+            border-bottom: 3px solid #1a73e8;
+            padding-bottom: 8px;
+            font-size: 1.5em;
+        }
+
+        /* Estilos de formulario e inputs */
+        input[type="text"], input[type="number"], select, button {
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 0.9em;
+        }
+
+        button {
+            background-color: #1a73e8;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background-color: #0d47a1;
+        }
+
+        /* Estilo para el botón de eliminar todo */
+        #clear-all-button {
+            background-color: #dc3545; /* Rojo de peligro */
+        }
+        #clear-all-button:hover {
+            background-color: #c82333;
+        }
+
+        /* Lista de Semáforos */
+        #semaphore-list {
+            list-style: none;
+            padding: 0;
+            flex-grow: 1;
+        }
+
+        .semaphore-item {
+            padding: 12px;
+            margin-bottom: 10px;
+            background-color: #e8f0fe;
+            border-radius: 8px;
+            border-left: 5px solid #1a73e8;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .semaphore-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .semaphore-name {
+            font-weight: bold;
+            color: #333;
+            cursor: pointer;
+            text-decoration: underline;
+            font-size: 1.1em;
+            flex-grow: 1;
+        }
+
+        /* Indicador de color y tiempo actual */
+        .color-status-group {
+            display: flex;
+            align-items: center;
+        }
+
+        .semaphore-color-indicator {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid #333;
+            margin-left: 10px;
+            transition: background-color 0.5s;
+        }
+
+        /* Configuración de Tiempos dentro de la Lista */
+        .timer-config {
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px dashed #ccc;
+        }
+
+        .timer-config label {
+            display: block;
+            margin-top: 5px;
+            font-size: 0.85em;
+            color: #555;
+        }
+
+        .timer-config input {
+            width: calc(100% - 10px);
+            padding: 6px;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+
+        .action-buttons {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 10px;
+        }
+
+        .action-buttons button {
+            width: auto;
+            margin-left: 5px;
+            padding: 5px 10px;
+            font-size: 0.8em;
+            background-color: #dc3545; /* Rojo para eliminar */
+        }
+
+        .action-buttons button:hover {
+            background-color: #c82333;
+        }
+
+        /* Estilos de los íconos de semáforo (Máximo 10px + 2px borde) */
+        .semaphore-icon {
+            width: 10px; 
+            height: 10px;
+            border-radius: 50%;
+            border: 2px solid #333; 
+            box-shadow: 0 0 4px rgba(0, 0, 0, 0.7);
+            transition: background-color 0.5s;
+        }
+
+        /* Clases de colores */
+        .color-green { background-color: green; }
+        .color-yellow { background-color: yellow; }
+        .color-red { background-color: red; }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h2 class="title">🚦 Control de Semáforos</h2>
+
+        <div id="add-semaphore-panel">
+            <h3>Agregar Nuevo Semáforo</h3>
+            <input type="text" id="sem-name" placeholder="Nombre del Semáforo" required>
+            <select id="sem-start-color" required>
+                <option value="RED">Color Inicial: Rojo</option>
+                <option value="YELLOW">Color Inicial: Amarillo</option>
+                <option value="GREEN" selected>Color Inicial: Verde</option>
+            </select>
+            <input type="number" id="sem-time-green" placeholder="Tiempo VERDE (segundos)" min="1" value="5" required>
+            <input type="number" id="sem-time-yellow" placeholder="Tiempo AMARILLO (segundos)" min="1" value="2" required>
+            <input type="number" id="sem-time-red" placeholder="Tiempo ROJO (segundos)" min="1" value="5" required>
+            <button onclick="addSemaphore()">➕ Agregar al Mapa</button>
+        </div>
+
+        <h3 class="title">Lista y Configuración de Semáforos</h3>
+        <ul id="semaphore-list">
+            </ul>
+        
+        <button id="clear-all-button" onclick="clearAllSemaphores()">🗑️ Eliminar Todos los Semáforos Guardados</button>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <script>
+        // === CONFIGURACIÓN Y VARIABLES GLOBALES ===
+
+        const USER_LOCATION_KEY = 'userLocation';
+        const SEMAPHORES_KEY = 'semaphores';
+
+        let map;
+        let userMarker;
+        let userCircle;
+        let currentWatchId = null; 
+        let semaphoreMarkers = {}; // { id: L.Marker }
+        let semaphoreIntervals = {}; // { id: timerId }
+
+        const COLOR_SEQUENCE = ['GREEN', 'YELLOW', 'RED'];
+        const COLOR_MAP = {
+            'GREEN': 'color-green',
+            'YELLOW': 'color-yellow',
+            'RED': 'color-red'
+        };
+
+
+        // === GEOLOCALIZACIÓN Y SEGUIMIENTO ===
+
+        /**
+         * Inicializa el mapa y carga la ubicación guardada.
+         */
+        function initMap() {
+            // Inicializar el mapa centrado en una ubicación por defecto
+            map = L.map('map').setView([40.4168, -3.7038], 13); 
+
+            // Añadir capa de tiles (OpenStreetMap)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+
+            loadInitialLocation();
+            loadSemaphores();
+        }
+        
+        /**
+         * Carga la ubicación inicial del usuario (o la pide por primera vez).
+         */
+        function loadInitialLocation() {
+            const storedLocation = localStorage.getItem(USER_LOCATION_KEY);
+
+            if (storedLocation) {
+                const { lat, lng } = JSON.parse(storedLocation);
+                map.setView([lat, lng], 16);
+                // Iniciar el seguimiento continuo para el trayecto
+                startUserTracking(); 
+            } else {
+                // Solicitar la ubicación y guardarla por única vez
+                getUserLocation(true); 
+            }
+        }
+
+        /**
+         * Obtiene la posición actual del usuario.
+         * @param {boolean} saveAndStartTracking - Si debe guardarla y activar el seguimiento.
+         */
+        function getUserLocation(saveAndStartTracking) {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+
+                        if (saveAndStartTracking) {
+                            // Guardar la primera ubicación (simulando "para siempre")
+                            localStorage.setItem(USER_LOCATION_KEY, JSON.stringify({ lat, lng }));
+                            map.setView([lat, lng], 16);
+                            startUserTracking();
+                        }
+                    },
+                    (error) => {
+                        console.error("Error al obtener ubicación:", error);
+                        alert("No se pudo obtener la ubicación. El navegador requiere permiso para el seguimiento continuo para mover el mapa según tu trayecto.");
+                    },
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+                );
+            } else {
+                alert("Tu navegador no soporta la API de Geolocation.");
+            }
+        }
+
+        /**
+         * Inicia el seguimiento continuo de la posición del usuario y mueve el mapa.
+         */
+        function startUserTracking() {
+            if (currentWatchId !== null) {
+                navigator.geolocation.clearWatch(currentWatchId);
+            }
+
+            if (navigator.geolocation) {
+                currentWatchId = navigator.geolocation.watchPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        const accuracy = position.coords.accuracy;
+                        const latlng = [lat, lng];
+
+                        if (!userMarker) {
+                            userMarker = L.marker(latlng).addTo(map).bindPopup("Tu Posición Actual");
+                            userCircle = L.circle(latlng, { radius: accuracy, color: 'blue', fillOpacity: 0.2 }).addTo(map);
+                        } else {
+                            userMarker.setLatLng(latlng);
+                            userCircle.setLatLng(latlng).setRadius(accuracy);
+                        }
+
+                        // Mover el mapa para seguir al usuario
+                        map.panTo(latlng);
+                    },
+                    (error) => {
+                        console.error("Error en el seguimiento:", error);
+                    },
+                    { enableHighAccuracy: true, maximumAge: 0 }
+                );
+            }
+        }
+
+
+        // === GESTIÓN DE SEMÁFOROS (CRUD Y PERSISTENCIA) ===
+
+        /**
+         * Carga los semáforos guardados y reinicia sus ciclos.
+         */
+        function loadSemaphores() {
+            const storedSemaphores = JSON.parse(localStorage.getItem(SEMAPHORES_KEY) || '[]');
+
+            // Limpiar y resetear todo antes de cargar
+            Object.values(semaphoreMarkers).forEach(marker => marker.remove());
+            Object.values(semaphoreIntervals).forEach(intervalId => clearInterval(intervalId));
+            semaphoreMarkers = {};
+            semaphoreIntervals = {};
+            document.getElementById('semaphore-list').innerHTML = '';
+
+            storedSemaphores.forEach(sem => {
+                createSemaphoreMarker(sem);
+                addSemaphoreToSidebar(sem);
+                startTrafficLightCycle(sem);
+            });
+        }
+
+        /**
+         * Guarda todos los semáforos en LocalStorage.
+         */
+        function saveSemaphores(semaphores) {
+            localStorage.setItem(SEMAPHORES_KEY, JSON.stringify(semaphores));
+        }
+
+        /**
+         * FUNCIÓN NUEVA: Elimina todos los semáforos del LocalStorage y de la interfaz.
+         */
+        function clearAllSemaphores() {
+            if (!confirm("ADVERTENCIA: ¿Estás seguro de que quieres eliminar TODOS los semáforos guardados? Esta acción es irreversible.")) {
+                return;
+            }
+
+            // 1. Detener todos los ciclos de tiempo
+            Object.values(semaphoreIntervals).forEach(intervalId => clearInterval(intervalId));
+            semaphoreIntervals = {};
+
+            // 2. Eliminar todos los marcadores del mapa
+            Object.values(semaphoreMarkers).forEach(marker => marker.remove());
+            semaphoreMarkers = {};
+
+            // 3. Eliminar la clave del LocalStorage (la eliminación real)
+            localStorage.removeItem(SEMAPHORES_KEY);
+
+            // 4. Limpiar la lista del sidebar
+            document.getElementById('semaphore-list').innerHTML = '';
+
+            alert("Todos los semáforos han sido eliminados permanentemente del almacenamiento.");
+        }
+
+
+        /**
+         * Añade un nuevo semáforo al mapa y al panel.
+         */
+        function addSemaphore() {
+            const name = document.getElementById('sem-name').value.trim();
+            const startColor = document.getElementById('sem-start-color').value;
+            const timeGreen = parseInt(document.getElementById('sem-time-green').value, 10);
+            const timeYellow = parseInt(document.getElementById('sem-time-yellow').value, 10);
+            const timeRed = parseInt(document.getElementById('sem-time-red').value, 10);
+
+            if (!name || isNaN(timeGreen) || isNaN(timeYellow) || isNaN(timeRed) || timeGreen < 1 || timeYellow < 1 || timeRed < 1) {
+                alert("Por favor, completa el nombre y asegura que todos los tiempos sean números positivos.");
+                return;
+            }
+
+            // Usar el centro actual del mapa como ubicación inicial del semáforo
+            const center = map.getCenter();
+            
+            const newSemaphore = {
+                id: Date.now(), 
+                name: name,
+                lat: center.lat,
+                lng: center.lng,
+                times: { GREEN: timeGreen, YELLOW: timeYellow, RED: timeRed }, 
+                currentColor: startColor,
+                currentTime: (startColor === 'GREEN' ? timeGreen : (startColor === 'YELLOW' ? timeYellow : timeRed))
+            };
+
+            // 1. Añadir al almacenamiento local
+            const storedSemaphores = JSON.parse(localStorage.getItem(SEMAPHORES_KEY) || '[]');
+            storedSemaphores.push(newSemaphore);
+            saveSemaphores(storedSemaphores);
+
+            // 2. Crear marcador y añadir a la interfaz sin refrescar
+            createSemaphoreMarker(newSemaphore);
+            addSemaphoreToSidebar(newSemaphore);
+            startTrafficLightCycle(newSemaphore);
+
+            // 3. Limpiar formulario
+            document.getElementById('sem-name').value = '';
+        }
+
+        /**
+         * Crea el marcador Leaflet para un semáforo (arrastrable).
+         */
+        function createSemaphoreMarker(sem) {
+            const iconHtml = `<div id="sem-icon-${sem.id}" class="semaphore-icon ${COLOR_MAP[sem.currentColor]}"></div>`;
+            const customIcon = L.divIcon({
+                className: 'custom-div-icon',
+                html: iconHtml,
+                iconSize: [14, 14] // 10px icono + 2px borde * 2 = 14px total
+            });
+
+            const marker = L.marker([sem.lat, sem.lng], {
+                icon: customIcon,
+                draggable: true 
+            }).addTo(map)
+              .bindPopup(`<b>${sem.name}</b><br>Color: ${sem.currentColor}<br>Tiempo: ${sem.currentTime}s`);
+
+            // Evento para guardar la nueva posición al arrastrar
+            marker.on('dragend', (e) => {
+                const newLatLng = e.target.getLatLng();
+                updateSemaphoreLocation(sem.id, newLatLng.lat, newLatLng.lng);
+            });
+
+            semaphoreMarkers[sem.id] = marker;
+        }
+
+        /**
+         * Actualiza la ubicación de un semáforo en el LocalStorage.
+         */
+        function updateSemaphoreLocation(id, lat, lng) {
+            const storedSemaphores = JSON.parse(localStorage.getItem(SEMAPHORES_KEY) || '[]');
+            const index = storedSemaphores.findIndex(s => s.id === id);
+
+            if (index !== -1) {
+                storedSemaphores[index].lat = lat;
+                storedSemaphores[index].lng = lng;
+                saveSemaphores(storedSemaphores);
+            }
+        }
+
+        /**
+         * Añade o actualiza la entrada de un semáforo en el panel lateral (con inputs de modificación).
+         */
+        function addSemaphoreToSidebar(sem) {
+            const list = document.getElementById('semaphore-list');
+            let item = document.getElementById(`list-item-${sem.id}`);
+
+            if (!item) {
+                item = document.createElement('li');
+                item.className = 'semaphore-item';
+                item.id = `list-item-${sem.id}`;
+                list.appendChild(item);
+            }
+
+            // Generar los inputs de configuración de tiempo dentro de la lista (cumpliendo el requisito)
+            const timeConfigHTML = `
+                <div class="timer-config">
+                    <label>Verde:</label>
+                    <input type="number" id="time-green-${sem.id}" value="${sem.times.GREEN}" min="1" 
+                           onchange="updateSemaphoreTime(${sem.id}, 'GREEN', this.value)" required>
+                    
+                    <label>Amarillo:</label>
+                    <input type="number" id="time-yellow-${sem.id}" value="${sem.times.YELLOW}" min="1" 
+                           onchange="updateSemaphoreTime(${sem.id}, 'YELLOW', this.value)" required>
+                           
+                    <label>Rojo:</label>
+                    <input type="number" id="time-red-${sem.id}" value="${sem.times.RED}" min="1" 
+                           onchange="updateSemaphoreTime(${sem.id}, 'RED', this.value)" required>
+                </div>
+            `;
+
+            // Contenido completo del elemento de la lista
+            item.innerHTML = `
+                <div class="semaphore-header">
+                    <span class="semaphore-name" onclick="promptRename(${sem.id}, '${sem.name}')">${sem.name}</span>
+                    <div class="color-status-group">
+                        <span id="list-time-${sem.id}" style="font-weight: bold;">${sem.currentTime}s</span>
+                        <div id="list-color-${sem.id}" class="semaphore-color-indicator ${COLOR_MAP[sem.currentColor]}"></div>
+                    </div>
+                </div>
+                ${timeConfigHTML}
+                <div class="action-buttons">
+                    <button onclick="removeSemaphore(${sem.id})">🗑️ Eliminar</button>
+                </div>
+            `;
+        }
+        
+        /**
+         * Detiene el ciclo y elimina un semáforo (individual).
+         */
+        function removeSemaphore(id) {
+            if (!confirm("¿Seguro que quieres eliminar este semáforo?")) return;
+
+            // 1. Detener el ciclo de tiempo
+            if (semaphoreIntervals[id]) {
+                clearInterval(semaphoreIntervals[id]);
+                delete semaphoreIntervals[id];
+            }
+
+            // 2. Eliminar del mapa y de la lista y LocalStorage
+            if (semaphoreMarkers[id]) map.removeLayer(semaphoreMarkers[id]);
+            delete semaphoreMarkers[id];
+
+            const listItem = document.getElementById(`list-item-${id}`);
+            if (listItem) listItem.remove();
+
+            const storedSemaphores = JSON.parse(localStorage.getItem(SEMAPHORES_KEY) || '[]');
+            const updatedSemaphores = storedSemaphores.filter(s => s.id !== id);
+            saveSemaphores(updatedSemaphores);
+        }
+
+        /**
+         * Solicita un nuevo nombre para el semáforo y actualiza la persistencia y la UI.
+         */
+        function promptRename(id, currentName) {
+            const newName = prompt(`Modificar nombre para: ${currentName}`, currentName);
+            if (newName && newName.trim() !== currentName) {
+                modifySemaphoreName(id, newName.trim());
+            }
+        }
+
+        /**
+         * Modifica el nombre de un semáforo.
+         */
+        function modifySemaphoreName(id, newName) {
+            const storedSemaphores = JSON.parse(localStorage.getItem(SEMAPHORES_KEY) || '[]');
+            const index = storedSemaphores.findIndex(s => s.id === id);
+
+            if (index !== -1) {
+                storedSemaphores[index].name = newName;
+                saveSemaphores(storedSemaphores);
+                
+                // Actualizar interfaz sin refrescar
+                const nameSpan = document.querySelector(`#list-item-${id} .semaphore-name`);
+                if (nameSpan) {
+                    nameSpan.textContent = newName;
+                    nameSpan.setAttribute('onclick', `promptRename(${id}, '${newName}')`);
+                }
+                const marker = semaphoreMarkers[id];
+                if (marker) {
+                    marker.setPopupContent(`<b>${newName}</b><br>Color: ${storedSemaphores[index].currentColor}<br>Tiempo: ${storedSemaphores[index].currentTime}s`);
+                }
+            }
+        }
+
+        /**
+         * Modifica el tiempo de un color específico para un semáforo y actualiza el estado.
+         */
+        function updateSemaphoreTime(id, color, newTime) {
+            newTime = parseInt(newTime, 10);
+            if (isNaN(newTime) || newTime < 1) {
+                alert("El tiempo debe ser un número positivo.");
+                loadSemaphores(); // Recargar para revertir el input inválido
+                return;
+            }
+
+            const storedSemaphores = JSON.parse(localStorage.getItem(SEMAPHORES_KEY) || '[]');
+            const index = storedSemaphores.findIndex(s => s.id === id);
+
+            if (index !== -1) {
+                storedSemaphores[index].times[color] = newTime;
+                
+                // Si el color actual es el que se está modificando, también se actualiza el tiempo restante.
+                if (storedSemaphores[index].currentColor === color) {
+                    storedSemaphores[index].currentTime = newTime;
+                }
+
+                saveSemaphores(storedSemaphores);
+                // Reiniciar el ciclo para que use los nuevos tiempos
+                startTrafficLightCycle(storedSemaphores[index]);
+            }
+        }
+
+
+        // === LÓGICA DEL CICLO DE SEMÁFORO ===
+
+        /**
+         * Inicia el ciclo de cambio de color para un semáforo.
+         */
+        function startTrafficLightCycle(sem) {
+            if (semaphoreIntervals[sem.id]) {
+                clearInterval(semaphoreIntervals[sem.id]);
+            }
+
+            function cycleStep() {
+                const storedSemaphores = JSON.parse(localStorage.getItem(SEMAPHORES_KEY) || '[]');
+                let s = storedSemaphores.find(item => item.id === sem.id);
+                
+                if (!s) return clearInterval(semaphoreIntervals[sem.id]);
+
+                if (s.currentTime > 1) {
+                    // Disminuir el tiempo
+                    s.currentTime -= 1;
+                } else {
+                    // Cambiar de color
+                    const currentIndex = COLOR_SEQUENCE.indexOf(s.currentColor);
+                    const nextIndex = (currentIndex + 1) % COLOR_SEQUENCE.length;
+                    const nextColor = COLOR_SEQUENCE[nextIndex];
+
+                    s.currentColor = nextColor;
+                    s.currentTime = s.times[nextColor]; // Usar el tiempo configurado para el nuevo color
+                }
+
+                // 3. Actualizar la interfaz y guardar el estado
+                updateSemaphoreUI(s);
+                
+                const index = storedSemaphores.findIndex(item => item.id === sem.id);
+                if (index !== -1) {
+                    storedSemaphores[index].currentColor = s.currentColor;
+                    storedSemaphores[index].currentTime = s.currentTime;
+                    saveSemaphores(storedSemaphores);
+                }
+            }
+
+            // Ejecutar el primer paso y establecer el intervalo
+            cycleStep(); 
+            semaphoreIntervals[sem.id] = setInterval(cycleStep, 1000); 
+        }
+
+        /**
+         * Actualiza visualmente el semáforo en el mapa y en la lista.
+         */
+        function updateSemaphoreUI(sem) {
+            const colorClass = COLOR_MAP[sem.currentColor];
+
+            // 1. Actualizar ícono del mapa
+            const mapIcon = document.getElementById(`sem-icon-${sem.id}`);
+            if (mapIcon) {
+                mapIcon.className = `semaphore-icon ${colorClass}`;
+            }
+            
+            // 2. Actualizar indicador de color y tiempo en la lista
+            const listColorIndicator = document.getElementById(`list-color-${sem.id}`);
+            if (listColorIndicator) {
+                listColorIndicator.className = `semaphore-color-indicator ${colorClass}`;
+            }
+            const listTime = document.getElementById(`list-time-${sem.id}`);
+            if (listTime) {
+                listTime.textContent = `${sem.currentTime}s`;
+            }
+
+            // 3. Actualizar el popup
+            const marker = semaphoreMarkers[sem.id];
+            if (marker) {
+                marker.getPopup().setContent(`<b>${sem.name}</b><br>Color: ${sem.currentColor}<br>Tiempo: ${sem.currentTime}s`);
+            }
+        }
+
+
+        // === INICIO DE LA APLICACIÓN ===
+        
+        document.addEventListener('DOMContentLoaded', initMap);
+
+    </script>
+</body>
+</html>
