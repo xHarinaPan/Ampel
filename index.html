@@ -34,7 +34,30 @@
 
   <div id="map"></div>
 
+  <!-- Leaflet -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="scripts.js"></script>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+    import { getDatabase } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDTNChvfjISKiGk-pd6cTnVshH9_XJYwlQ",
+      authDomain: "amepl-c993c.firebaseapp.com",
+      projectId: "amepl-c993c",
+      storageBucket: "amepl-c993c.firebasestorage.app",
+      messagingSenderId: "1051522141799",
+      appId: "1:1051522141799:web:6a46b1d9bb0645c9598ec2",
+      measurementId: "G-72RQZG9HZB",
+      databaseURL: "https://amepl-c993c-default-rtdb.firebaseio.com/"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    window._db = db;
+
+    import "./script.js";
+  </script>
 </body>
 </html>
