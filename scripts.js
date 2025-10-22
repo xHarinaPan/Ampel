@@ -153,15 +153,16 @@ async function addSemaphore() {
   if (!name) return alert("Ingrese un nombre válido.");
 
   const center = map.getCenter();
-  let newS = {
-    name,
-    lat: center.lat,
-    lng: center.lng,
-    times: { GREEN: timeGreen, YELLOW: timeYellow, RED: timeRed },
-    currentColor: startColor,
-    currentTime:
-      startColor === "GREEN" ? timeGreen : startColor === "YELLOW" ? timeYellow : timeRed
-  };
+let newS = {
+  name,
+  lat: center.lat,
+  lng: center.lng,
+  times: { GREEN: timeGreen, YELLOW: timeYellow, RED: timeRed },
+  currentColor: startColor,
+  currentTime:
+    startColor === "GREEN" ? timeGreen : startColor === "YELLOW" ? timeYellow : timeRed,
+  lastChange: Date.now() // 🕒 Nuevo campo para sincronizar el ciclo
+};
 
   newS = await addSemaphoreFirebase(newS);
   semaphores.push(newS);
@@ -197,11 +198,30 @@ function renderAllSemaphores() {
   const list = document.getElementById("semaphore-list");
   list.innerHTML = "";
 
-  semaphores.forEach(s => {
-    createSemaphoreMarker(s);
-    addSemaphoreToSidebar(s);
-    startTrafficLightCycle(s);
-  });
+semaphores.forEach(s => {
+  // 🕒 Sincroniza color según tiempo transcurrido
+  if (s.lastChange) {
+    const elapsed = Math.floor((Date.now() - s.lastChange) / 1000);
+    const cycle = s.times.GREEN + s.times.YELLOW + s.times.RED;
+    const mod = elapsed % cycle;
+    let acc = 0;
+
+    for (const color of COLOR_SEQUENCE) {
+      acc += s.times[color];
+      if (mod < acc) {
+        s.currentColor = color;
+        s.currentTime = acc - mod;
+        break;
+      }
+    }
+  }
+  
+
+  createSemaphoreMarker(s);
+  addSemaphoreToSidebar(s);
+  startTrafficLightCycle(s);
+});
+saveSemaphoresLocal(semaphores);
 }
 
 function createSemaphoreMarker(sem) {
@@ -268,19 +288,29 @@ async function updateSemaphoreTime(id, color, value) {
 // ===============================
 // 🔹 CICLO SEMÁFORO
 // ===============================
-function startTrafficLightCycle(sem) {
-  if (semaphoreIntervals[sem.id]) clearInterval(semaphoreIntervals[sem.id]);
-  function step() {
-    if (sem.currentTime > 1) sem.currentTime--;
-    else {
-      const next = COLOR_SEQUENCE[(COLOR_SEQUENCE.indexOf(sem.currentColor) + 1) % COLOR_SEQUENCE.length];
-      sem.currentColor = next;
-      sem.currentTime = sem.times[next];
+function startTrafficLightCycle(sem){
+    if(semaphoreIntervals[sem.id]) clearInterval(semaphoreIntervals[sem.id]);
+
+    function step(){
+        if(sem.currentTime > 1) {
+            sem.currentTime--;
+        } else {
+            const next = COLOR_SEQUENCE[(COLOR_SEQUENCE.indexOf(sem.currentColor)+1)%COLOR_SEQUENCE.length];
+            sem.currentColor = next;
+            sem.currentTime = sem.times[next];
+            // 🕒 Guardar timestamp del cambio de color
+            sem.lastChange = Date.now();
+            updateSemaphoreFirebase(sem.id, {
+                currentColor: sem.currentColor,
+                currentTime: sem.currentTime,
+                lastChange: sem.lastChange
+            });
+        }
+        updateSemaphoreUI(sem);
     }
-    updateSemaphoreUI(sem);
-  }
-  step();
-  semaphoreIntervals[sem.id] = setInterval(step, 1000);
+
+    step();
+    semaphoreIntervals[sem.id] = setInterval(step, 1000);
 }
 
 function updateSemaphoreUI(sem) {
